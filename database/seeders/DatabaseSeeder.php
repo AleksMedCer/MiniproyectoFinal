@@ -15,38 +15,39 @@ class DatabaseSeeder extends Seeder
     {
         $telefonoDemo = env('DEMO_PHONE', '9617017722');
 
-        User::factory()->create([
+        User::query()->updateOrCreate(['email' => 'admin@netehis.com'], [
             'name' => 'Admin Master',
-            'email' => 'admin@netehis.com',
             'phone' => $telefonoDemo,
             'password' => bcrypt('password'),
             'role' => User::ROLE_ADMIN,
         ]);
 
-        User::factory()->create([
+        User::query()->updateOrCreate(['email' => 'medcer94@gmail.com'], [
+            'name' => 'Medcer Prueba',
+            'phone' => $telefonoDemo,
+            'password' => bcrypt('password'),
+            'role' => User::ROLE_ADMIN,
+        ]);
+
+        User::query()->updateOrCreate(['email' => 'gerente@netehis.com'], [
             'name' => 'Gerente Ventas',
-            'email' => 'gerente@netehis.com',
             'phone' => $telefonoDemo,
             'password' => bcrypt('password'),
             'role' => User::ROLE_GERENTE,
         ]);
 
-        User::factory()->create([
+        User::query()->updateOrCreate(['email' => 'comprador@netehis.com'], [
             'name' => 'Comprador Demo',
-            'email' => 'comprador@netehis.com',
             'phone' => $telefonoDemo,
             'password' => bcrypt('password'),
             'role' => User::ROLE_COMPRADOR,
         ]);
 
-        User::factory(69)->create([
-            'role' => User::ROLE_COMPRADOR,
-        ]);
+        $this->crearCompradoresDemo($telefonoDemo);
 
         $vendedores = collect([
-            User::factory()->create([
+            User::query()->updateOrCreate(['email' => 'vendedor@netehis.com'], [
                 'name' => 'TecnoNorte MX',
-                'email' => 'vendedor@netehis.com',
                 'phone' => $telefonoDemo,
                 'password' => bcrypt('password'),
                 'role' => User::ROLE_VENDEDOR,
@@ -55,20 +56,25 @@ class DatabaseSeeder extends Seeder
 
         $categorias = collect($this->categoriasDemo())
             ->mapWithKeys(fn (array $categoria) => [
-                $categoria['nombre'] => Categoria::create($categoria),
-            ]);
+                $categoria['nombre'] => Categoria::query()->firstOrCreate(
+                    ['nombre' => $categoria['nombre']],
+                    ['descripcion' => $categoria['descripcion']]
+                ),
+        ]);
 
         foreach ($this->catalogoProductos() as $indice => $producto) {
-            Producto::create([
-                'categoria_id' => $categorias[$producto['categoria']]->id,
-                'vendedor_id' => $vendedores->values()->get($indice % $vendedores->count())->id,
-                'nombre' => $producto['nombre'],
-                'descripcion' => $producto['descripcion'],
-                'precio' => $producto['precio'],
-                'fotos' => [
-                    $this->imagenProducto($producto['nombre'].' '.$producto['imagen']),
-                ],
-            ]);
+            Producto::query()->updateOrCreate(
+                ['nombre' => $producto['nombre']],
+                [
+                    'categoria_id' => $categorias[$producto['categoria']]->id,
+                    'vendedor_id' => $vendedores->values()->get($indice % $vendedores->count())->id,
+                    'descripcion' => $producto['descripcion'],
+                    'precio' => $producto['precio'],
+                    'fotos' => [
+                        $this->imagenProducto($producto['nombre'].' '.$producto['imagen']),
+                    ],
+                ]
+            );
         }
 
         $productos = Producto::all();
@@ -76,7 +82,9 @@ class DatabaseSeeder extends Seeder
 
         Storage::disk('local')->put('tickets/demo-dashboard.txt', "Ticket demo para ventas sembradas.\n");
 
-        for ($i = 0; $i < 110; $i++) {
+        $ventasFaltantes = max(0, 110 - Venta::query()->count());
+
+        for ($i = 0; $i < $ventasFaltantes; $i++) {
             $fecha = now()->subDays(rand(0, 20))->subHours(rand(0, 23))->subMinutes(rand(0, 59));
 
             Venta::create([
@@ -88,6 +96,19 @@ class DatabaseSeeder extends Seeder
                 'updated_at' => $fecha,
             ]);
         }
+    }
+
+    private function crearCompradoresDemo(string $telefonoDemo)
+    {
+        return collect(range(1, 69))->map(fn (int $numero) => User::query()->updateOrCreate(
+            ['email' => sprintf('comprador.demo.%02d@netehis.com', $numero)],
+            [
+                'name' => sprintf('Comprador Demo %02d', $numero),
+                'phone' => $telefonoDemo,
+                'password' => bcrypt('password'),
+                'role' => User::ROLE_COMPRADOR,
+            ]
+        ));
     }
 
     private function crearTiendasDemo(string $telefonoDemo)
@@ -122,13 +143,15 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Arena Gamer Store', 'email' => 'hola@arenagamer.mx'],
             ['name' => 'Decoralia Home', 'email' => 'ventas@decoralia.mx'],
             ['name' => 'Outlet Premium MX', 'email' => 'contacto@outletpremium.mx'],
-        ])->map(fn (array $tienda) => User::factory()->create([
-            'name' => $tienda['name'],
-            'email' => $tienda['email'],
-            'phone' => $telefonoDemo,
-            'password' => bcrypt('password'),
-            'role' => User::ROLE_VENDEDOR,
-        ]));
+        ])->map(fn (array $tienda) => User::query()->updateOrCreate(
+            ['email' => $tienda['email']],
+            [
+                'name' => $tienda['name'],
+                'phone' => $telefonoDemo,
+                'password' => bcrypt('password'),
+                'role' => User::ROLE_VENDEDOR,
+            ]
+        ));
     }
 
     private function categoriasDemo(): array

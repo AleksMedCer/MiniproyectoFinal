@@ -321,7 +321,9 @@
                     </div>
                     <div class="space-y-4">
                         @foreach($productosPorCategoria as $categoria)
-                            @php($pct = $totalProductos > 0 ? round(($categoria->productos_count / $totalProductos) * 100) : 0)
+                            @php
+                                $pct = $totalProductos > 0 ? round(($categoria->productos_count / $totalProductos) * 100) : 0;
+                            @endphp
                             <div>
                                 <div class="mb-1.5 flex justify-between text-sm">
                                     <span class="font-semibold text-gray-700">{{ $categoria->nombre }}</span>
@@ -607,6 +609,53 @@
                             </button>
                         </div>
                     </form>
+                </article>
+
+                <article class="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+                    <div class="flex flex-col gap-3 border-b border-gray-100 p-6 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h2 class="text-xl font-bold text-gray-900">Usuarios registrados</h2>
+                            <p class="text-sm text-gray-500">Cuentas cargadas por registro y seeders de despliegue</p>
+                        </div>
+                        <span class="inline-flex w-fit items-center rounded-full bg-gray-900 px-3 py-1 text-sm font-bold text-white">
+                            {{ $usuarios->count() }} usuarios
+                        </span>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-100 text-sm">
+                            <thead class="bg-gray-50 text-left text-xs font-bold uppercase tracking-wider text-gray-500">
+                                <tr>
+                                    <th class="px-6 py-3">Nombre</th>
+                                    <th class="px-6 py-3">Correo</th>
+                                    <th class="px-6 py-3">Rol</th>
+                                    <th class="px-6 py-3">Telefono</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 bg-white">
+                                @foreach($usuarios as $usuario)
+                                    @php
+                                        $roleClasses = [
+                                            'admin' => 'bg-red-50 text-red-700',
+                                            'gerente' => 'bg-orange-50 text-orange-700',
+                                            'vendedor' => 'bg-blue-50 text-blue-700',
+                                            'comprador' => 'bg-emerald-50 text-emerald-700',
+                                        ][$usuario->role] ?? 'bg-gray-100 text-gray-700';
+                                    @endphp
+                                    <tr class="hover:bg-gray-50">
+                                        <td class="whitespace-nowrap px-6 py-4 font-semibold text-gray-900">{{ $usuario->name }}</td>
+                                        <td class="whitespace-nowrap px-6 py-4 text-gray-600">{{ $usuario->email }}</td>
+                                        <td class="whitespace-nowrap px-6 py-4">
+                                            <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold uppercase {{ $roleClasses }}">
+                                                {{ $usuario->role }}
+                                            </span>
+                                        </td>
+                                        <td class="whitespace-nowrap px-6 py-4 text-gray-600">{{ $usuario->phone ?? 'Sin telefono' }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
                 </article>
             </section>
         </div>

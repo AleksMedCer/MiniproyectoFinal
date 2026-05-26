@@ -94,4 +94,42 @@ class MandatoryRequirementsTest extends TestCase
         $response->assertSee('Dashboard Operativo');
         $this->assertAuthenticatedAs($user);
     }
+
+    public function test_dashboard_muestra_usuarios_sembrados()
+    {
+        $this->seed();
+
+        $admin = User::where('email', 'admin@netehis.com')->firstOrFail();
+
+        $response = $this->actingAs($admin)->get('/dashboard');
+
+        $response->assertStatus(200);
+        $response->assertSee('Usuarios registrados');
+        $response->assertSee('medcer94@gmail.com');
+        $response->assertSee('gerente@netehis.com');
+        $response->assertSee('vendedor@netehis.com');
+        $response->assertSee('comprador.demo.01@netehis.com');
+    }
+
+    public function test_comando_demo_seed_users_asegura_usuarios_principales()
+    {
+        $this->artisan('demo:seed-users')
+            ->expectsOutput('Usuarios demo asegurados.')
+            ->assertExitCode(0);
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'medcer94@gmail.com',
+            'role' => User::ROLE_ADMIN,
+        ]);
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'vendedor@netehis.com',
+            'role' => User::ROLE_VENDEDOR,
+        ]);
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'comprador.demo.01@netehis.com',
+            'role' => User::ROLE_COMPRADOR,
+        ]);
+    }
 }

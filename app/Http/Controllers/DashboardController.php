@@ -65,6 +65,7 @@ class DashboardController extends Controller
 
         $productosPorCategoria = Categoria::withCount('productos')->orderBy('nombre')->get();
         $usuariosPorRol = User::select('role')->get()->groupBy('role')->map->count();
+        $usuarios = User::orderBy('role')->orderBy('name')->get();
 
         $ventasPorDia = collect(range(13, 0))
             ->map(function ($daysAgo) use ($ventas) {
@@ -161,6 +162,7 @@ class DashboardController extends Controller
             'tasaValidacion',
             'productosPorCategoria',
             'usuariosPorRol',
+            'usuarios',
             'ventasPorDia',
             'productoMasVendido',
             'productosTop',

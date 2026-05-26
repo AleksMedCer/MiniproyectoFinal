@@ -65,4 +65,59 @@ class TwoFactorEmailTest extends TestCase
         $response->assertDontSee('9617017722');
         $response->assertDontSee('Código de prueba');
     }
+
+    public function test_usuario_demo_puede_generar_codigo_2fa_sin_smtp(): void
+    {
+        Mail::fake();
+
+        config([
+            'services.demo_2fa.email' => 'medcer94@gmail.com',
+            'services.demo_2fa.code' => '123456',
+            'services.demo_2fa.skip_mail' => true,
+        ]);
+
+        $user = User::factory()->create([
+            'email' => 'medcer94@gmail.com',
+            'password' => bcrypt('password'),
+        ]);
+
+        $response = $this->from('/entrar')->post('/entrar', [
+            'email' => 'medcer94@gmail.com',
+            'password' => 'password',
+        ]);
+
+        $response->assertRedirect('/2fa');
+
+        $this->assertDatabaseHas('verificacion_codigos', [
+            'user_id' => $user->id,
+            'codigo' => '123456',
+        ]);
+
+        Mail::assertNothingSent();
+    }
+
+    public function test_comando_mail_test_envia_correo_de_prueba(): void
+    {
+        Mail::fake();
+
+        $this->artisan('mail:test', ['email' => 'medcer94@gmail.com'])
+            ->assertExitCode(0);
+
+        Mail::assertSent(Codigo2FAMail::class, function (Codigo2FAMail $mail) {
+            return $mail->hasTo('medcer94@gmail.com');
+        });
+    }
+
+    public function test_comando_mail_diagnose_no_revela_password(): void
+    {
+        config([
+            'mail.mailers.smtp.username' => 'correo@example.com',
+            'mail.mailers.smtp.password' => 'secreto-super-privado',
+        ]);
+
+        $this->artisan('mail:diagnose')
+            ->expectsOutput('MAIL_USERNAME=configurado')
+            ->expectsOutput('MAIL_PASSWORD=configurado')
+            ->assertExitCode(0);
+    }
 }

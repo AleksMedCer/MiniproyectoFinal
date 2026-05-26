@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'demo_2fa' => [
+        'email' => env('DEMO_2FA_EMAIL'),
+        'code' => env('DEMO_2FA_CODE'),
+        'skip_mail' => env('DEMO_2FA_SKIP_MAIL', false),
+    ],
+
 ];

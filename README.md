@@ -111,13 +111,31 @@ APP_KEY=
 APP_DEBUG=false
 APP_URL=
 
-DB_CONNECTION=
+DB_CONNECTION=mysql
 DB_HOST=
-DB_PORT=
-DB_DATABASE=
+DB_PORT=3306
+DB_DATABASE=laravel
 DB_USERNAME=
 DB_PASSWORD=
 ```
+
+En Laravel Cloud se recomienda usar como build command:
+
+```bash
+bash scripts/laravel-cloud-build.sh
+```
+
+Ese script instala dependencias y compila assets sin guardar credenciales en el
+repositorio.
+
+Como deploy command en Laravel Cloud:
+
+```bash
+bash scripts/laravel-cloud-deploy.sh
+```
+
+Ese script ejecuta migraciones y seeders sobre la base MySQL configurada en
+Laravel Cloud, por lo que no es necesario capturar datos manualmente.
 
 ## URL Publica del Sistema
 

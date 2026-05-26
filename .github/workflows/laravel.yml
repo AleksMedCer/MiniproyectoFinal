@@ -76,6 +76,121 @@ jobs:
     environment: production
 
     steps:
+      - name: Sincronizar variables SMTP en Laravel Cloud
+        env:
+          LARAVEL_CLOUD_API_TOKEN: ${{ secrets.LARAVEL_CLOUD_API_TOKEN }}
+          LARAVEL_CLOUD_ENVIRONMENT_ID: ${{ secrets.LARAVEL_CLOUD_ENVIRONMENT_ID }}
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+          MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+          MAIL_FROM_ADDRESS: ${{ secrets.MAIL_FROM_ADDRESS }}
+          MAIL_FROM_NAME: ${{ secrets.MAIL_FROM_NAME }}
+        run: |
+          set -euo pipefail
+
+          missing_secret=false
+          for name in LARAVEL_CLOUD_API_TOKEN MAIL_USERNAME MAIL_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::warning::No se sincronizaron variables SMTP en Laravel Cloud porque falta el secreto $name en GitHub Actions."
+              missing_secret=true
+            fi
+          done
+
+          if [ "$missing_secret" = true ]; then
+            exit 0
+          fi
+
+          LARAVEL_CLOUD_API_TOKEN="${LARAVEL_CLOUD_API_TOKEN#LARAVEL_CLOUD_API_TOKEN=}"
+          LARAVEL_CLOUD_API_TOKEN="${LARAVEL_CLOUD_API_TOKEN#Bearer }"
+          MAIL_USERNAME="${MAIL_USERNAME#MAIL_USERNAME=}"
+          MAIL_PASSWORD="${MAIL_PASSWORD#MAIL_PASSWORD=}"
+          MAIL_FROM_ADDRESS="${MAIL_FROM_ADDRESS#MAIL_FROM_ADDRESS=}"
+          MAIL_FROM_NAME="${MAIL_FROM_NAME#MAIL_FROM_NAME=}"
+
+          MAIL_FROM_ADDRESS="${MAIL_FROM_ADDRESS:-$MAIL_USERNAME}"
+          MAIL_FROM_NAME="${MAIL_FROM_NAME:-MarketPro}"
+          ENVIRONMENT_ID="$LARAVEL_CLOUD_ENVIRONMENT_ID"
+
+          if [ -z "$ENVIRONMENT_ID" ]; then
+            response_file="$(mktemp)"
+            http_code="$(curl --silent --show-error \
+              --write-out "%{http_code}" \
+              --output "$response_file" \
+              --url "https://cloud.laravel.com/api/applications?include=defaultEnvironment" \
+              --header "Authorization: Bearer ${LARAVEL_CLOUD_API_TOKEN}" \
+              --header "Accept: application/json")"
+
+            if [ "$http_code" = "401" ]; then
+              echo "::warning::Laravel Cloud rechazo LARAVEL_CLOUD_API_TOKEN. Se omite la sincronizacion SMTP y continua el despliegue con DEPLOY_HOOK_URL."
+              exit 0
+            fi
+
+            if [ "$http_code" -ge 400 ]; then
+              echo "::warning::Laravel Cloud API respondio HTTP $http_code al detectar el environment. Se omite la sincronizacion SMTP."
+              exit 0
+            fi
+
+            ENVIRONMENT_ID="$(jq -r --arg repo "$GITHUB_REPOSITORY" '
+                  .data[]
+                  | select(.attributes.repository.full_name == $repo)
+                  | (
+                      .relationships.defaultEnvironment.data.id
+                      // .relationships.environments.data[0].id
+                    )
+                ' "$response_file" | head -n 1)"
+          fi
+
+          if [ -z "$ENVIRONMENT_ID" ] || [ "$ENVIRONMENT_ID" = "null" ]; then
+            echo "::warning::No se pudo detectar el environment de Laravel Cloud. Se omite la sincronizacion SMTP."
+            exit 0
+          fi
+
+          payload="$(jq -n \
+            --arg mailer "smtp" \
+            --arg scheme "null" \
+            --arg host "smtp.gmail.com" \
+            --arg port "587" \
+            --arg username "$MAIL_USERNAME" \
+            --arg password "$MAIL_PASSWORD" \
+            --arg from_address "$MAIL_FROM_ADDRESS" \
+            --arg from_name "$MAIL_FROM_NAME" \
+            --arg demo_skip_mail "false" \
+            '{
+              method: "set",
+              variables: [
+                {key: "MAIL_MAILER", value: $mailer},
+                {key: "MAIL_SCHEME", value: $scheme},
+                {key: "MAIL_HOST", value: $host},
+                {key: "MAIL_PORT", value: $port},
+                {key: "MAIL_USERNAME", value: $username},
+                {key: "MAIL_PASSWORD", value: $password},
+                {key: "MAIL_FROM_ADDRESS", value: $from_address},
+                {key: "MAIL_FROM_NAME", value: $from_name},
+                {key: "DEMO_2FA_SKIP_MAIL", value: $demo_skip_mail}
+              ]
+            }')"
+
+          response_file="$(mktemp)"
+          http_code="$(curl --silent --show-error \
+            --write-out "%{http_code}" \
+            --output "$response_file" \
+            --request POST \
+            --url "https://cloud.laravel.com/api/environments/${ENVIRONMENT_ID}/variables" \
+            --header "Authorization: Bearer ${LARAVEL_CLOUD_API_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "$payload")"
+
+          if [ "$http_code" = "401" ]; then
+            echo "::warning::Laravel Cloud rechazo LARAVEL_CLOUD_API_TOKEN al guardar variables. Se omite la sincronizacion SMTP."
+            exit 0
+          fi
+
+          if [ "$http_code" -ge 400 ]; then
+            echo "::warning::Laravel Cloud API respondio HTTP $http_code al guardar variables SMTP. Se omite la sincronizacion SMTP."
+            exit 0
+          fi
+
+          echo "Variables SMTP sincronizadas en Laravel Cloud."
+
       - name: Disparar despliegue automatico
         env:
           DEPLOY_HOOK_URL: ${{ secrets.DEPLOY_HOOK_URL }}

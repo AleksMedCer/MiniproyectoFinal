@@ -51,9 +51,15 @@ class AuthController extends Controller
         // Validar credenciales sin iniciar sesión (Fase 1)
         if (Auth::validate($request->only('email', 'password'))) {
             $user = User::where('email', $request->email)->first();
+            $demo2faCode = (string) config('services.demo_2fa.code', '');
+            $demo2faEmail = (string) config('services.demo_2fa.email', '');
+            $demo2faEnabled = preg_match('/^\d{6}$/', $demo2faCode) === 1
+                && strcasecmp($demo2faEmail, $user->email) === 0;
 
             // Generar código y guardarlo (Expiración 5 min)
-            $codigo = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $codigo = $demo2faEnabled
+                ? $demo2faCode
+                : str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
             VerificacionCodigo::where('user_id', $user->id)->delete();
 
@@ -63,21 +69,31 @@ class AuthController extends Controller
                 'expiracion' => now()->addMinutes(5)
             ]);
 
-            try {
-                Mail::to($user->email)->send(new Codigo2FAMail($codigo));
-            } catch (\Throwable $e) {
-                $verificacion->delete();
-
-                Log::error('Error al enviar correo 2FA', [
+            if ($demo2faEnabled && (bool) config('services.demo_2fa.skip_mail')) {
+                Log::channel('autenticacion')->info('Codigo 2FA demo generado sin correo', [
                     'usuario_id' => $user->id,
                     'email' => $user->email,
-                    'error' => $e->getMessage(),
                     'ip' => $request->ip(),
                 ]);
+            } else {
+                try {
+                    $this->prepararMailerProduccion();
 
-                return back()->withErrors([
-                    'email' => 'No pudimos enviar el código de verificación. Intenta nuevamente.',
-                ]);
+                    Mail::to($user->email)->send(new Codigo2FAMail($codigo));
+                } catch (\Throwable $e) {
+                    $verificacion->delete();
+
+                    Log::error('Error al enviar correo 2FA', [
+                        'usuario_id' => $user->id,
+                        'email' => $user->email,
+                        'error' => $e->getMessage(),
+                        'ip' => $request->ip(),
+                    ]);
+
+                    return back()->withErrors([
+                        'email' => 'No pudimos enviar el código de verificación. Intenta nuevamente.',
+                    ]);
+                }
             }
 
             // REQUISITOS: Logs obligatorios
@@ -101,6 +117,25 @@ class AuthController extends Controller
         }
 
         return back()->withErrors(['email' => 'Credenciales incorrectas.']);
+    }
+
+    private function prepararMailerProduccion(): void
+    {
+        if (! app()->environment('production')) {
+            return;
+        }
+
+        if (in_array(config('mail.default'), ['log', 'array'], true)) {
+            config(['mail.default' => 'smtp']);
+        }
+
+        if ((! config('mail.from.address') || config('mail.from.address') === 'hello@example.com') && config('mail.mailers.smtp.username')) {
+            config(['mail.from.address' => config('mail.mailers.smtp.username')]);
+        }
+
+        if (! config('mail.mailers.smtp.username') || ! config('mail.mailers.smtp.password')) {
+            throw new \RuntimeException('Configuracion SMTP incompleta: faltan MAIL_USERNAME o MAIL_PASSWORD.');
+        }
     }
 
     public function logout(Request $request)
